@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>New Glimmer Hold</title>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #111;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    // Game variables
+    let player;
+    let tendrils = [];
+    let orbs = [];
+    let sparks = [];
+    let energy = 100;
+    let survivalTime = 0;
+    let gameState = "playing";
+
+    function setup() {
+      createCanvas(600, 600);
+      textAlign(CENTER, CENTER);
+      textSize(20);
+      
+      // Initialize player
+      player = { x: width / 2, y: height / 2, speed: 4 };
+      
+      // Initial tendrils (one per side)
+      tendrils.push({ x: random(width), y: 0, angle: random(PI, TWO_PI) });
+      tendrils.push({ x: random(width), y: height, angle: random(0, PI) });
+      tendrils.push({ x: 0, y: random(height), angle: random(HALF_PI, PI + HALF_PI) });
+      tendrils.push({ x: width, y: random(height), angle: random(-HALF_PI, HALF_PI) });
+    }
+
+    function draw() {
+      background(0, 15); // Dark with slight fade
+      
+      if (gameState === "playing") {
+        updateGame();
+        drawGame();
+      } else {
+        drawGameOver();
+      }
+    }
+
+    function updateGame() {
+      // Player movement
+      if (keyIsDown(LEFT_ARROW)) player.x -= player.speed;
+      if (keyIsDown(RIGHT_ARROW)) player.x += player.speed;
+      if (keyIsDown(UP_ARROW)) player.y -= player.speed;
+      if (keyIsDown(DOWN_ARROW)) player.y += player.speed;
+      player.x = constrain(player.x, 0, width);
+      player.y = constrain(player.y, 0, height);
+
+      // Energy depletion
+      energy -= 0.5 / 60; // Slow base drain (60 FPS)
+      survivalTime += 1 / 60;
+
+      // Tendrils
+      for (let t of tendrils) {
+        t.x += cos(t.angle) * 0.6;
+        t.y += sin(t.angle) * 0.6;
+        if (dist(player.x, player.y, t.x, t.y) < 40) energy -= 0.8 / 60;
+      }
+      if (random() < 0.02) tendrils.push({ x: random(width), y: 0, angle: random(PI, TWO_PI) });
+
+      // Shadow Orbs
+      for (let i = orbs.length - 1; i >= 0; i--) {
+        let o = orbs[i];
+        let angle = atan2(player.y - o.y, player.x - o.x);
+        o.x += cos(angle) * 1.5;
+        o.y += sin(angle) * 1.5;
+        if (dist(player.x, player.y, o.x, o.y) < 25) energy -= 1 / 60;
+        if (o.x < 0 || o.x > width || o.y < 0 || o.y > height) orbs.splice(i, 1);
+      }
+      if (random() < 0.03) orbs.push({ x: random(width), y: random(height) });
+
+      // Sparks
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        let s = sparks[i];
+        if (dist(player.x, player.y, s.x, s.y) < 20) {
+          energy = min(energy + 25, 100);
+          sparks.splice(i, 1);
+        }
+      }
+      if (random() < 0.04) sparks.push({ x: random(width), y: random(height) });
+
+      // Game over check
+      if (energy <= 0) {
+        energy = 0;
+        gameState = "over";
+      }
+    }
+
+    function drawGame() {
+      // Tendrils
+      stroke(30, 50);
+      strokeWeight(4);
+      for (let t of tendrils) {
+        line(t.x, t.y, t.x - cos(t.angle) * 15, t.y - sin(t.angle) * 15);
+      }
+
+      // Shadow Orbs
+      noStroke();
+      fill(50, 50, 50, 200);
+      for (let o of orbs) {
+        ellipse(o.x, o.y, 20);
+        fill(255, 0, 0, 150 + sin(frameCount * 0.1) * 50);
+        ellipse(o.x, o.y, 8);
+      }
+
+      // Sparks
+      fill(255, 255, 0, 200 + sin(frameCount * 0.15) * 55);
+      for (let s of sparks) ellipse(s.x, s.y, 10);
+
+      // Player (Light)
+      noStroke();
+      for (let r = 30; r > 0; r -= 2) {
+        fill(255, 255, 255, r * 8);
+        ellipse(player.x, player.y, r + 10);
+      }
+
+      // UI
+      fill(255);
+      rect(10, 10, energy * 2, 10); // Energy bar
+      text(`Time: ${floor(survivalTime)}s`, width / 2, 20);
+    }
+
+    function drawGameOver() {
+      drawGame();
+      fill(255, 0, 0, 200);
+      text(`Game Over! Time: ${floor(survivalTime)}s`, width / 2, height / 2);
+      text("Press R to Restart", width / 2, height / 2 + 30);
+    }
+
+    function keyPressed() {
+      if (key === ' ' && energy >= 20 && gameState === "playing") {
+        energy -= 20;
+        for (let i = orbs.length - 1; i >= 0; i--) {
+          let o = orbs[i];
+          if (dist(player.x, player.y, o.x, o.y) < 100) orbs.splice(i, 1);
+        }
+      }
+      if (key === 'r' && gameState === "over") {
+        energy = 100;
+        survivalTime = 0;
+        tendrils = tendrils.slice(0, 4);
+        orbs = [];
+        sparks = [];
+        player.x = width / 2;
+        player.y = height / 2;
+        gameState = "playing";
+      }
+    }
+  </script>
+</body>
+</html> 
