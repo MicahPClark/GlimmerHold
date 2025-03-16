@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Glimmer Hold</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #111;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    let player;
+    let sparks = [];
+    let energy = 100;
+    
+    function setup() {
+      createCanvas(600, 600);
+      textAlign(CENTER, CENTER);
+      textSize(20);
+      
+      // Initialize player
+      player = { x: width / 2, y: height / 2, speed: 4 };
+      
+      // Add some initial sparks
+      for (let i = 0; i < 5; i++) {
+        sparks.push({ x: random(width), y: random(height) });
+      }
+    }
+    
+    function draw() {
+      background(0, 15); // Dark with slight fade
+      
+      // Player movement
+      if (keyIsDown(LEFT_ARROW)) player.x -= player.speed;
+      if (keyIsDown(RIGHT_ARROW)) player.x += player.speed;
+      if (keyIsDown(UP_ARROW)) player.y -= player.speed;
+      if (keyIsDown(DOWN_ARROW)) player.y += player.speed;
+      player.x = constrain(player.x, 0, width);
+      player.y = constrain(player.y, 0, height);
+      
+      // Energy depletion
+      energy -= 0.5 / 60;
+      
+      // Sparks
+      fill(255, 255, 0, 200 + sin(frameCount * 0.15) * 55);
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        let s = sparks[i];
+        ellipse(s.x, s.y, 10);
+        
+        if (dist(player.x, player.y, s.x, s.y) < 20) {
+          energy = min(energy + 25, 100);
+          sparks.splice(i, 1);
+          sparks.push({ x: random(width), y: random(height) });
+        }
+      }
+      
+      // Player (Light)
+      noStroke();
+      for (let r = 30; r > 0; r -= 2) {
+        fill(255, 255, 255, r * 8);
+        ellipse(player.x, player.y, r + 10);
+      }
+      
+      // UI
+      fill(255);
+      rect(10, 10, energy * 2, 10); // Energy bar
+      text("Use arrow keys to move", width / 2, 20);
+      text("Collect yellow sparks", width / 2, 40);
+    }
+  </script>
+</body>
+</html> 
