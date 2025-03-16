@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>P5.js Test</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #111;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    function setup() {
+      createCanvas(400, 400);
+      console.log("P5.js test setup complete");
+    }
+    
+    function draw() {
+      background(0);
+      fill(255);
+      ellipse(width/2, height/2, 50, 50);
+      text("P5.js is working!", width/2, height/2 + 50);
+    }
+  </script>
+</body>
+</html> 
