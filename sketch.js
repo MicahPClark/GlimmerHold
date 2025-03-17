@@ -22,7 +22,7 @@ let characterTypes = {
     name: "SOLDIER",
     baseSpeed: 4,
     maxEnergy: 100,
-    description: "Average speed and energy"
+    description: "Balanced"
   },
   tank: {
     name: "TANK",
@@ -99,12 +99,26 @@ const ENEMY_TYPES = {
 // Add a loading state variable
 let isLoading = false;
 
+// Add this near the top of the file with other global variables
+let soundEnabled = true; // Sound is enabled by default
+
 console.log("Script started loading");
 
 function preload() {
   console.log("Preload function started");
-  // We're skipping sound loading for now
-  console.log("Sound loading skipped");
+  
+  // Create sounds using oscillators instead of loading files
+  try {
+    // Initialize sounds object
+    sounds = {};
+    
+    // We'll create sounds on-the-fly using oscillators
+    console.log("Using oscillator-based sounds instead of loading sound files");
+  } catch (e) {
+    console.log("Error setting up sounds: " + e.message);
+    // Initialize empty sounds object as fallback
+    sounds = {};
+  }
   
   // Initialize high scores object to track scores for each difficulty
   highScores = {
@@ -167,6 +181,43 @@ function setup() {
   if (subtitleEl) {
     subtitleEl.style.opacity = '0';
     subtitleEl.style.display = 'none';
+  }
+  
+  // Add this function after setup
+  initializeAudio();
+}
+
+// Add this function after setup
+function initializeAudio() {
+  console.log("Initializing audio...");
+  
+  // Create and immediately suspend a temporary audio context
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const tempContext = new AudioContext();
+    
+    if (tempContext.state === 'suspended') {
+      console.log("Audio context is suspended. Attempting to resume...");
+      tempContext.resume().then(() => {
+        console.log("Audio context resumed successfully");
+      }).catch(err => {
+        console.error("Failed to resume audio context:", err);
+      });
+    }
+    
+    // Play a silent sound to unlock audio on iOS
+    const silentBuffer = tempContext.createBuffer(1, 1, 22050);
+    const source = tempContext.createBufferSource();
+    source.buffer = silentBuffer;
+    source.connect(tempContext.destination);
+    source.start(0);
+    
+    console.log("Audio initialized");
+    
+    // Set a flag to indicate audio has been initialized
+    window.audioInitialized = true;
+  } catch (e) {
+    console.error("Error initializing audio:", e);
   }
 }
 
@@ -389,6 +440,9 @@ function updateGame() {
               lifespan: 1.2
             });
             
+            // Play bomber explosion sound
+            playSound('bomberExplode', 1.0);
+            
             // Damage player if in explosion radius - increased from 120 to 150
             if (dist(player.x, player.y, o.x, o.y) < 150 && activeEffects.shield <= 0) {
               let explosionDamage = 150 * difficultySettings[difficulty].damageMultiplier * difficultyScaling.damageScale / 60; // Increased from 90 to 150
@@ -419,6 +473,9 @@ function updateGame() {
         
         // Create hit particles
         createParticles(player.x, player.y, 5, [255, 0, 0]);
+        
+        // Play player hit sound when player collides with enemies
+        playSound('playerHit', 0.5);
       }
       
       // Handle splitter enemy destruction on collision
@@ -427,10 +484,6 @@ function updateGame() {
         for (let j = 0; j < 2; j++) {
           createSplitterFragment(o.x, o.y, o.size * 0.6);
         }
-        // No points for collision kills
-        // score += 25;
-        // No floating score text for collision kills
-        // createFloatingText(o.x, o.y, "+25", [255, 255, 100]);
       } else if (o.type === ENEMY_TYPES.BOMBER) {
         // Trigger bomber explosion on collision
         createParticles(o.x, o.y, 20, [255, 100, 0]);
@@ -440,17 +493,6 @@ function updateGame() {
           let explosionDamage = 75 * difficultySettings[difficulty].damageMultiplier * difficultyScaling.damageScale / 60; // Increased from 45 to 75
           energy -= explosionDamage; // Additional explosion damage
         }
-        
-        // No points for collision kills
-        // score += 30;
-        // No floating score text for collision kills
-        // createFloatingText(o.x, o.y, "+30", [255, 255, 100]);
-      } else {
-        // Standard enemy destruction - no points for collision kills
-        // let scoreValue = o.type === ENEMY_TYPES.DASHER ? 25 : 20;
-        // score += scoreValue;
-        // No floating score text for collision kills
-        // createFloatingText(o.x, o.y, `+${scoreValue}`, [255, 255, 100]);
       }
       
       // Create destruction particles
@@ -500,6 +542,9 @@ function updateGame() {
       score += 50;
       sparks.splice(i, 1);
       createParticles(s.x, s.y, 10, [255, 255, 0]);
+      
+      // Play energy sound when collecting sparks
+      playSound('energy', 0.4);
     }
   }
   if (random() < difficultySettings[difficulty].sparkFrequency) {
@@ -514,6 +559,8 @@ function updateGame() {
       powerUps.splice(i, 1);
       createParticles(p.x, p.y, 15, [0, 255, 255]);
       score += 100;
+      
+      // Note: The activatePowerUp function already plays the appropriate sounds
     }
   }
   // Only spawn new power-ups if there are fewer than 2 on screen
@@ -555,6 +602,10 @@ function updateGame() {
   if (energy <= 0) {
     energy = 0;
     gameState = "over";
+    
+    // Play game over sound
+    playSound('gameOver', 0.9);
+    
     if (score > highScores[difficulty]) {
       // Update both the current highScore and the difficulty-specific highScore
       highScore = score;
@@ -1024,6 +1075,57 @@ function drawUI() {
   }
   textSize(16);
   text(characterTypes[characterType].name, charX, charY + 5);
+  
+  // Add sound toggle button in the bottom right corner
+  let soundBtnX = width - 30;
+  let soundBtnY = height - 30;
+  let soundBtnSize = 24;
+  
+  // Button background
+  noStroke();
+  fill(50, 50, 70, 150);
+  ellipse(soundBtnX, soundBtnY, soundBtnSize);
+  
+  // Button icon
+  if (soundEnabled) {
+    // Sound on icon
+    fill(200, 200, 255);
+    // Speaker cone
+    rect(soundBtnX - 6, soundBtnY - 3, 4, 6);
+    // Sound waves
+    noFill();
+    stroke(200, 200, 255);
+    strokeWeight(1.5);
+    arc(soundBtnX, soundBtnY, 12, 12, -PI/4, PI/4);
+    arc(soundBtnX, soundBtnY, 16, 16, -PI/4, PI/4);
+  } else {
+    // Sound off icon
+    fill(150, 150, 200);
+    // Speaker cone
+    rect(soundBtnX - 6, soundBtnY - 3, 4, 6);
+    // X mark
+    stroke(150, 150, 200);
+    strokeWeight(1.5);
+    line(soundBtnX + 1, soundBtnY - 4, soundBtnX + 6, soundBtnY + 4);
+    line(soundBtnX + 6, soundBtnY - 4, soundBtnX + 1, soundBtnY + 4);
+  }
+  noStroke();
+  
+  // Add test sound button
+  let testSoundBtnX = width - 80;
+  let testSoundBtnY = height - 30;
+  let testSoundBtnW = 80;
+  let testSoundBtnH = 24;
+  
+  // Button background
+  fill(70, 70, 120, 150);
+  rect(testSoundBtnX - testSoundBtnW/2, testSoundBtnY - testSoundBtnH/2, testSoundBtnW, testSoundBtnH, 5);
+  
+  // Button text
+  fill(200, 200, 255);
+  textAlign(CENTER, CENTER);
+  textSize(12);
+  text("Test Sound", testSoundBtnX, testSoundBtnY);
 }
 
 // Helper function to draw rounded rectangles
@@ -1580,8 +1682,64 @@ function drawButton(x, y, w, h, label, color, clickHandler) {
 }
 
 function mousePressed() {
+  // Initialize audio on first interaction
+  if (!window.audioInitialized) {
+    initializeAudio();
+  }
+  
   // Don't process mouse presses during loading
   if (isLoading) return;
+  
+  // Check if sound button was clicked
+  let soundBtnX = width - 30;
+  let soundBtnY = height - 30;
+  let soundBtnSize = 24;
+  
+  if (dist(mouseX, mouseY, soundBtnX, soundBtnY) < soundBtnSize/2) {
+    toggleSound();
+    return; // Don't process other clicks if sound button was clicked
+  }
+  
+  // Check if test sound button was clicked
+  let testSoundBtnX = width - 80;
+  let testSoundBtnY = height - 30;
+  let testSoundBtnW = 80;
+  let testSoundBtnH = 24;
+  
+  if (mouseX > testSoundBtnX - testSoundBtnW/2 && 
+      mouseX < testSoundBtnX + testSoundBtnW/2 && 
+      mouseY > testSoundBtnY - testSoundBtnH/2 && 
+      mouseY < testSoundBtnY + testSoundBtnH/2) {
+    console.log("Test sound button clicked");
+    
+    // Try p5.js sound first - removed blast sound
+    setTimeout(() => {
+      console.log("Trying p5.js sound...");
+      // playSound('blast', 0.5); // Blast sound removed
+      playSound('powerUp', 0.5); // Test a different sound instead
+    }, 0);
+    
+    // Try explosion sound after a delay - removed
+    // setTimeout(() => {
+    //   console.log("Trying p5.js explosion sound...");
+    //   playSound('bomberExplode', 0.5);
+    // }, 2000);
+    
+    // Then try Web Audio API directly as fallback - removed punch sound
+    setTimeout(() => {
+      console.log("Trying Web Audio API sound...");
+      // playBasicTone(150, 200, 0.5, 'punch'); // Punch sound removed
+      playBasicTone(440, 500, 0.5); // Test a simple tone instead
+    }, 2000);
+    
+    // Try explosion with Web Audio API - removed
+    // setTimeout(() => {
+    //   console.log("Trying Web Audio API explosion sound...");
+    //   playBasicTone(100, 1500, 0.5, 'explosion');
+    // }, 6000);
+    
+    return;
+  }
   
   if (gameState === "over") {
     checkButtonClicks();
@@ -1789,6 +1947,182 @@ function keyPressed() {
   }
 }
 
+// Update the playSound function to create more impactful sounds
+function playSound(soundName, volume = 1.0) {
+  // Only play sounds if enabled
+  if (!soundEnabled) {
+    console.log("Sound is disabled, not playing:", soundName);
+    return;
+  }
+  
+  console.log("Attempting to play sound:", soundName, "with volume:", volume);
+  
+  try {
+    // Create an oscillator
+    let osc = new p5.Oscillator();
+    let env = new p5.Envelope();
+    
+    // For more complex sounds
+    let osc2 = null;
+    let env2 = null;
+    
+    console.log("Created oscillator and envelope");
+    
+    // Configure the envelope
+    env.setADSR(0.001, 0.1, 0.2, 0.1);
+    env.setRange(volume, 0);
+    
+    // Set oscillator type and frequency based on sound type
+    switch(soundName) {
+      case 'blast':
+        // Make blast sound like a punch
+        osc.setType('square');
+        osc.freq(150);  // Lower frequency for punch sound
+        env.setADSR(0.001, 0.05, 0.0, 0.1); // Very short attack and release for punch
+        
+        // Add a second oscillator for more punch impact
+        osc2 = new p5.Oscillator();
+        osc2.setType('triangle');
+        osc2.freq(80);  // Even lower frequency component
+        env2 = new p5.Envelope();
+        env2.setADSR(0.001, 0.02, 0.0, 0.08);
+        env2.setRange(volume * 0.8, 0);
+        
+        // Start both oscillators
+        osc2.start();
+        env2.play(osc2);
+        
+        // Stop the second oscillator
+        setTimeout(() => {
+          osc2.stop();
+        }, 200);
+        break;
+        
+      case 'bomberExplode':
+        // Create a more dramatic explosion sound
+        osc.setType('sawtooth');
+        osc.freq(100);  // Start with a low rumble
+        env.setADSR(0.001, 0.1, 0.1, 0.8); // Longer release for explosion tail
+        env.setRange(volume * 1.2, 0); // Slightly louder
+        
+        // Add a noise-like component with a second oscillator
+        osc2 = new p5.Oscillator();
+        osc2.setType('square');
+        osc2.freq(60);
+        env2 = new p5.Envelope();
+        env2.setADSR(0.001, 0.2, 0.1, 0.6);
+        env2.setRange(volume, 0);
+        
+        // Start the second oscillator
+        osc2.start();
+        env2.play(osc2);
+        
+        // Create frequency modulation for explosion effect
+        setTimeout(() => osc.freq(80), 50);
+        setTimeout(() => osc.freq(60), 100);
+        setTimeout(() => osc.freq(40), 200);
+        setTimeout(() => osc.freq(30), 300);
+        
+        // Random frequency changes for second oscillator to simulate debris
+        for (let i = 0; i < 8; i++) {
+          setTimeout(() => {
+            osc2.freq(random(40, 120));
+          }, 100 + i * 80);
+        }
+        
+        // Stop the second oscillator
+        setTimeout(() => {
+          osc2.stop();
+        }, 800);
+        break;
+        
+      // Keep other sound effects the same
+      case 'powerUp':
+        osc.setType('sine');
+        osc.freq(880);
+        env.setADSR(0.001, 0.4, 0.1, 0.1);
+        // Frequency sweep up
+        setTimeout(() => osc.freq(1320), 50);
+        setTimeout(() => osc.freq(1760), 100);
+        break;
+      case 'enemyDeath':
+        osc.setType('square');
+        osc.freq(440);
+        env.setADSR(0.001, 0.1, 0.1, 0.3);
+        // Frequency sweep down
+        setTimeout(() => osc.freq(220), 50);
+        setTimeout(() => osc.freq(110), 100);
+        break;
+      case 'playerHit':
+        osc.setType('triangle');
+        osc.freq(110);
+        env.setADSR(0.001, 0.05, 0.1, 0.1);
+        break;
+      case 'gameOver':
+        osc.setType('sine');
+        osc.freq(440);
+        env.setADSR(0.001, 0.3, 0.5, 1.0);
+        // Sad descending notes
+        setTimeout(() => osc.freq(392), 300);
+        setTimeout(() => osc.freq(349), 600);
+        setTimeout(() => osc.freq(294), 900);
+        break;
+      case 'shield':
+        osc.setType('sine');
+        osc.freq(660);
+        env.setADSR(0.001, 0.2, 0.3, 0.2);
+        break;
+      case 'speed':
+        osc.setType('triangle');
+        osc.freq(1320);
+        env.setADSR(0.001, 0.1, 0.1, 0.1);
+        break;
+      case 'energy':
+        osc.setType('sine');
+        osc.freq(523);
+        env.setADSR(0.001, 0.1, 0.2, 0.1);
+        // Ascending arpeggio
+        setTimeout(() => osc.freq(659), 100);
+        setTimeout(() => osc.freq(784), 200);
+        break;
+      default:
+        osc.setType('sine');
+        osc.freq(440);
+        break;
+    }
+    
+    console.log("Starting oscillator for sound:", soundName);
+    
+    // Start the sound
+    osc.start();
+    env.play(osc);
+    
+    console.log("Sound started successfully");
+    
+    // Stop the oscillator after the envelope is done
+    setTimeout(() => {
+      osc.stop();
+      console.log("Sound stopped:", soundName);
+    }, soundName === 'bomberExplode' ? 1500 : 1000); // Longer duration for explosion
+    
+  } catch (e) {
+    console.error("Error playing sound:", soundName, e);
+  }
+}
+
+// Add this function after the playSound function
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  console.log("Sound " + (soundEnabled ? "enabled" : "disabled"));
+  
+  // Mute/unmute all sounds
+  for (let sound in sounds) {
+    if (sounds[sound] && sounds[sound].setVolume) {
+      sounds[sound].setVolume(soundEnabled ? 1.0 : 0.0);
+    }
+  }
+}
+
 function useBlast() {
   if (energy >= 20) {
     energy -= 20;
@@ -1884,6 +2218,9 @@ function useBlast() {
             maxSpeed: 3,
             lifespan: 1.2
           });
+          
+          // Play bomber explosion sound with higher volume for more impact
+          playSound('bomberExplode', 1.0);
         }
         
         // Remove the enemy and add score based on type
@@ -1898,7 +2235,7 @@ function useBlast() {
         score += scoreValue;
         createParticles(o.x, o.y, 5, [255, 0, 0]);
         
-        // Create floating score text with larger font to emphasize higher score
+        // Show floating score text with larger font to emphasize higher score
         createFloatingText(o.x, o.y, `+${scoreValue}`, [255, 255, 0], 20);
         
         // Chance to spawn a power-up when defeating an enemy with blast
@@ -1930,12 +2267,15 @@ function activatePowerUp(type) {
   switch(type) {
     case "shield":
       activeEffects.shield = 10; // 10 seconds of shield
+      playSound('shield', 0.8);
       break;
     case "speed":
       activeEffects.speed = 8; // 8 seconds of speed boost
+      playSound('speed', 0.8);
       break;
     case "energy":
       energy = player.maxEnergy; // Full energy based on character type
+      playSound('energy', 0.8);
       break;
     case "blast":
       // Super blast that clears the whole screen
@@ -1968,10 +2308,11 @@ function activatePowerUp(type) {
       orbs = [];
       
       createParticles(player.x, player.y, 50, [255, 150, 0]);
-      // Comment out sound playing
-      // if (sounds.blast) sounds.blast.play();
       break;
   }
+  
+  // Play general power-up sound for all power-ups
+  playSound('powerUp', 0.6);
 }
 
 function createParticles(x, y, count, color, options = {}) {
@@ -2340,4 +2681,110 @@ function createFloatingText(x, y, text, color, size = 16) {
     text: text, // Store the text to display
     isText: true // Flag to identify this as text, not a particle
   });
+}
+
+// Enhanced playBasicTone function to support more complex sounds
+function playBasicTone(frequency = 440, duration = 500, volume = 0.5, soundType = 'default') {
+  console.log("Attempting to play basic tone with Web Audio API, type:", soundType);
+  
+  try {
+    // Create audio context
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    console.log("Audio context created:", audioCtx);
+    
+    // Create oscillator
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    // Configure oscillator based on sound type
+    if (soundType === 'explosion') {
+      // Create a more complex explosion sound
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.value = 100;
+      
+      // Create frequency ramp for explosion effect
+      oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 1.0);
+      
+      // Volume envelope for explosion
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(volume * 1.2, audioCtx.currentTime + 0.1);
+      gainNode.gain.linearRampToValueAtTime(volume * 0.8, audioCtx.currentTime + 0.3);
+      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
+      
+      // Create a second oscillator for more complex explosion sound
+      const oscillator2 = audioCtx.createOscillator();
+      const gainNode2 = audioCtx.createGain();
+      
+      oscillator2.type = 'square';
+      oscillator2.frequency.value = 60;
+      
+      gainNode2.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode2.gain.linearRampToValueAtTime(volume * 0.7, audioCtx.currentTime + 0.2);
+      gainNode2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.8);
+      
+      oscillator2.connect(gainNode2);
+      gainNode2.connect(audioCtx.destination);
+      
+      oscillator2.start();
+      setTimeout(() => oscillator2.stop(), 800);
+      
+      duration = 1500; // Longer duration for explosion
+      
+    } else if (soundType === 'punch') {
+      // Create a punch sound
+      oscillator.type = 'square';
+      oscillator.frequency.value = 150;
+      
+      // Quick attack and release for punch sound
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.01);
+      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+      
+      // Add a lower frequency component for more impact
+      const oscillator2 = audioCtx.createOscillator();
+      const gainNode2 = audioCtx.createGain();
+      
+      oscillator2.type = 'triangle';
+      oscillator2.frequency.value = 80;
+      
+      gainNode2.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode2.gain.linearRampToValueAtTime(volume * 0.8, audioCtx.currentTime + 0.005);
+      gainNode2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
+      
+      oscillator2.connect(gainNode2);
+      gainNode2.connect(audioCtx.destination);
+      
+      oscillator2.start();
+      setTimeout(() => oscillator2.stop(), 200);
+      
+      duration = 200; // Shorter duration for punch
+      
+    } else {
+      // Default simple tone
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = volume;
+    }
+    
+    // Connect nodes
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    // Start and stop
+    console.log("Starting oscillator");
+    oscillator.start();
+    
+    setTimeout(() => {
+      console.log("Stopping oscillator");
+      oscillator.stop();
+      audioCtx.close();
+    }, duration);
+    
+    return true;
+  } catch (e) {
+    console.error("Error playing basic tone:", e);
+    return false;
+  }
 }
